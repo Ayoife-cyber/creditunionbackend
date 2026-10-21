@@ -8,31 +8,31 @@ import { sendEmail } from '../services/email.js';
 
 const router = Router();
 
-// Rate limiter â€” shared by signup and login to block brute-force / spam
+
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000, 
   max: 10,
   message: { message: 'Too many attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Helper: generate and hash an OTP, set it on the user object (does NOT save)
+
 async function prepareOtp(user) {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   user.otpHash = await bcrypt.hash(otp, 12);
-  user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
   return otp;
 }
 
-// Helper: generate, hash, persist an OTP on an already-saved user document
+
 async function issueOtp(user) {
   const otp = await prepareOtp(user);
   await user.save();
   return otp;
 }
 
-// â”€â”€ POST /api/auth/signup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// POST /api/auth/signup   
 router.post('/signup', authLimiter, async (req, res) => {
   try {
     const { fullName, email, password, confirmPassword, mobileNumber } = req.body;
