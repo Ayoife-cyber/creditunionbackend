@@ -82,6 +82,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '0 pts',
     },
+    withdrawalMessage: {
+      type: String,
+      default: '',
+    },
     otpHash: {
       type: String,
       select: false,
@@ -127,6 +131,7 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     cardType: this.cardType,
     spendLimit: this.spendLimit,
     rewards: this.rewards,
+    withdrawalMessage: this.withdrawalMessage || '',
     createdAt: this.createdAt,
   };
 };

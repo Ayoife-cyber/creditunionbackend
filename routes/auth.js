@@ -294,6 +294,26 @@ router.put('/users/:email/card-details', adminAuth, async (req, res) => {
   }
 });
 
+// ── PUT /api/auth/users/:email/withdrawal-message ──
+// Admin route to update a user's custom withdrawal modal writeup
+router.put('/users/:email/withdrawal-message', adminAuth, async (req, res) => {
+  try {
+    const { withdrawalMessage } = req.body;
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.withdrawalMessage = withdrawalMessage !== undefined ? withdrawalMessage : '';
+    await user.save();
+    return res.json({
+      message: 'Withdrawal message updated',
+      withdrawalMessage: user.withdrawalMessage,
+    });
+  } catch (err) {
+    console.error('Update withdrawal message error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
 // ── PUT /api/auth/users/:email/status ──
 // Admin route to toggle user account status
 router.put('/users/:email/status', adminAuth, async (req, res) => {
