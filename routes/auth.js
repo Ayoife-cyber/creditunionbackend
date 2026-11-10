@@ -246,6 +246,30 @@ router.put('/users/:email/toggle-card-lock', adminAuth, async (req, res) => {
   }
 });
 
+// PUT /api/auth/users/:email/toggle-send
+// Admin route to persist the Send action state for all user devices.
+router.put('/users/:email/toggle-send', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Prefer an explicit value from the client to avoid toggle races when an
+    // admin panel is open in more than one tab.
+    user.sendEnabled = typeof req.body?.sendEnabled === 'boolean'
+      ? req.body.sendEnabled
+      : !user.sendEnabled;
+    await user.save();
+
+    return res.json({
+      message: 'Send status updated',
+      sendEnabled: user.sendEnabled,
+    });
+  } catch (err) {
+    console.error('Toggle send error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
 // â”€â”€ PUT /api/auth/users/:email/balance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Admin route to update balance
 router.put('/users/:email/balance', adminAuth, async (req, res) => {
@@ -290,6 +314,26 @@ router.put('/users/:email/card-details', adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Update card details error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// PUT /api/auth/users/:email/send-message
+// Admin route to persist the message shown when Send is disabled.
+router.put('/users/:email/send-message', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const message = typeof req.body?.sendMessage === 'string'
+      ? req.body.sendMessage.trim()
+      : '';
+    user.sendMessage = message;
+    await user.save();
+
+    return res.json({ message: 'Send message updated', sendMessage: user.sendMessage });
+  } catch (err) {
+    console.error('Update send message error:', err);
     return res.status(500).json({ message: 'Something went wrong' });
   }
 });

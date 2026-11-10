@@ -86,6 +86,17 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // Admin-controlled Send action state. Keep this in MongoDB so the setting
+    // is consistent across browsers and devices.
+    sendEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    sendMessage: {
+      type: String,
+      default: '',
+      maxlength: 500,
+    },
     otpHash: {
       type: String,
       select: false,
@@ -132,6 +143,8 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     spendLimit: this.spendLimit,
     rewards: this.rewards,
     withdrawalMessage: this.withdrawalMessage || '',
+    sendEnabled: this.sendEnabled !== false,
+    sendMessage: this.sendMessage || '',
     createdAt: this.createdAt,
   };
 };
