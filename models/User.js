@@ -62,6 +62,20 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    usdtHolding: {
+      type: Number,
+      default: 2500,
+    },
+    btcWalletAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    usdtWalletAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     cardNumber: {
       type: String,
       default: '',
@@ -96,6 +110,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
       maxlength: 500,
+    },
+    sendReviewPopupEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    sendReviewPopupMessage: {
+      type: String,
+      default: '',
+      maxlength: 1000,
     },
     otpHash: {
       type: String,
@@ -137,6 +160,9 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     status: this.status,
     balanceUsd: this.balanceUsd,
     btcHolding: this.btcHolding,
+    usdtHolding: this.usdtHolding ?? 2500,
+    btcWalletAddress: this.btcWalletAddress || '',
+    usdtWalletAddress: this.usdtWalletAddress || '',
     cardNumber: this.cardNumber,
     expiryDate: this.expiryDate,
     cardType: this.cardType,
@@ -145,6 +171,8 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     withdrawalMessage: this.withdrawalMessage || '',
     sendEnabled: this.sendEnabled !== false,
     sendMessage: this.sendMessage || '',
+    sendReviewPopupEnabled: Boolean(this.sendReviewPopupEnabled),
+    sendReviewPopupMessage: this.sendReviewPopupMessage || '',
     createdAt: this.createdAt,
   };
 };
