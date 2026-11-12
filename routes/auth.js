@@ -31,6 +31,8 @@ async function getSendReviewSetting() {
   }
 }
 
+const DEFAULT_PREFILLED_MESSAGE = 'Hello, I need assistance with my account.';
+
 async function getGlobalAppSettings() {
   try {
     const doc = await Setting.findOne({ key: 'appGlobalSettings' });
@@ -45,12 +47,24 @@ async function getGlobalAppSettings() {
       withdrawalMessage: typeof val.withdrawalMessage === 'string' && val.withdrawalMessage.trim()
         ? val.withdrawalMessage.trim()
         : DEFAULT_WITHDRAWAL_MESSAGE,
+      telegramHandle: typeof val.telegramHandle === 'string'
+        ? val.telegramHandle.trim()
+        : '',
+      whatsappNumber: typeof val.whatsappNumber === 'string'
+        ? val.whatsappNumber.trim()
+        : '',
+      prefilledMessage: typeof val.prefilledMessage === 'string' && val.prefilledMessage.trim()
+        ? val.prefilledMessage.trim()
+        : DEFAULT_PREFILLED_MESSAGE,
     };
   } catch {
     return {
       btcWalletAddress: DEFAULT_BTC_WALLET,
       usdtWalletAddress: DEFAULT_USDT_WALLET,
       withdrawalMessage: DEFAULT_WITHDRAWAL_MESSAGE,
+      telegramHandle: '',
+      whatsappNumber: '',
+      prefilledMessage: DEFAULT_PREFILLED_MESSAGE,
     };
   }
 }
@@ -67,6 +81,9 @@ async function buildUserPayload(user) {
     globalBtcWalletAddress: globalApp.btcWalletAddress,
     globalUsdtWalletAddress: globalApp.usdtWalletAddress,
     globalWithdrawalMessage: globalApp.withdrawalMessage,
+    globalTelegramHandle: globalApp.telegramHandle || '',
+    globalWhatsappNumber: globalApp.whatsappNumber || '',
+    globalPrefilledMessage: globalApp.prefilledMessage || DEFAULT_PREFILLED_MESSAGE,
   };
 }
 
@@ -523,6 +540,30 @@ router.put('/users/:email/wallets', adminAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/auth/settings/public ──
+// Public endpoint for general frontend config (support links, deposit wallets)
+router.get('/settings/public', async (req, res) => {
+  try {
+    const globalApp = await getGlobalAppSettings();
+    return res.json({
+      telegramHandle: globalApp.telegramHandle || '',
+      whatsappNumber: globalApp.whatsappNumber || '',
+      prefilledMessage: globalApp.prefilledMessage || DEFAULT_PREFILLED_MESSAGE,
+      btcWalletAddress: globalApp.btcWalletAddress,
+      usdtWalletAddress: globalApp.usdtWalletAddress,
+    });
+  } catch (err) {
+    console.error('Get public settings error:', err);
+    return res.json({
+      telegramHandle: '',
+      whatsappNumber: '',
+      prefilledMessage: DEFAULT_PREFILLED_MESSAGE,
+      btcWalletAddress: DEFAULT_BTC_WALLET,
+      usdtWalletAddress: DEFAULT_USDT_WALLET,
+    });
+  }
+});
+
 // ── GET /api/auth/settings/global ──
 router.get('/settings/global', adminAuth, async (req, res) => {
   const settings = await getGlobalAppSettings();
@@ -543,6 +584,15 @@ router.put('/settings/global', adminAuth, async (req, res) => {
       withdrawalMessage: typeof req.body?.withdrawalMessage === 'string'
         ? (req.body.withdrawalMessage.trim() || DEFAULT_WITHDRAWAL_MESSAGE)
         : current.withdrawalMessage,
+      telegramHandle: typeof req.body?.telegramHandle === 'string'
+        ? req.body.telegramHandle.trim()
+        : current.telegramHandle,
+      whatsappNumber: typeof req.body?.whatsappNumber === 'string'
+        ? req.body.whatsappNumber.trim()
+        : current.whatsappNumber,
+      prefilledMessage: typeof req.body?.prefilledMessage === 'string'
+        ? (req.body.prefilledMessage.trim() || DEFAULT_PREFILLED_MESSAGE)
+        : current.prefilledMessage,
     };
 
     await Setting.findOneAndUpdate(
