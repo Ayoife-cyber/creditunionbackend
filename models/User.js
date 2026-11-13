@@ -41,6 +41,17 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    address: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 300,
+    },
+    accountType: {
+      type: String,
+      default: 'Premium Savings',
+      trim: true,
+    },
     status: {
       type: String,
       enum: ['active', 'inactive'],
@@ -120,6 +131,18 @@ const userSchema = new mongoose.Schema(
       default: '',
       maxlength: 1000,
     },
+    openPositions: [
+      {
+        symbol: { type: String, required: true },
+        side: { type: String, enum: ['buy', 'sell', 'long', 'short'], default: 'buy' },
+        assetType: { type: String, default: 'crypto' },
+        amountUsd: { type: Number, required: true },
+        entryPrice: { type: Number, required: true },
+        cryptoAmount: { type: Number, default: 0 },
+        leverage: { type: Number, default: 1 },
+        openedAt: { type: Date, default: Date.now },
+      },
+    ],
     otpHash: {
       type: String,
       select: false,
@@ -155,6 +178,8 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     fullName: this.fullName,
     email: this.email,
     mobileNumber: this.mobileNumber,
+    address: this.address || '',
+    accountType: this.accountType || 'Premium Savings',
     accountNumber: this.accountNumber,
     isCardLocked: this.isCardLocked,
     status: this.status,
@@ -173,6 +198,19 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     sendMessage: this.sendMessage || '',
     sendReviewPopupEnabled: Boolean(this.sendReviewPopupEnabled),
     sendReviewPopupMessage: this.sendReviewPopupMessage || '',
+    openPositions: Array.isArray(this.openPositions)
+      ? this.openPositions.map(p => ({
+          id: p._id,
+          symbol: p.symbol,
+          side: p.side,
+          assetType: p.assetType,
+          amountUsd: p.amountUsd,
+          entryPrice: p.entryPrice,
+          cryptoAmount: p.cryptoAmount,
+          leverage: p.leverage,
+          openedAt: p.openedAt,
+        }))
+      : [],
     createdAt: this.createdAt,
   };
 };

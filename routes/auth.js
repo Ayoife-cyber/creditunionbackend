@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Setting from '../models/Setting.js';
+import Transaction from '../models/Transaction.js';
 import { signToken, requireAuth, signTempToken, adminAuth } from '../middleware/auth.js';
 import { sendEmail } from '../services/email.js';
 
@@ -299,6 +300,37 @@ router.post('/verify-otp', async (req, res) => {
 // Used by the frontend on page load to restore the session from a stored token
 router.get('/me', requireAuth, async (req, res) => {
   return res.json({ user: await buildUserPayload(req.user) });
+});
+
+// ── PUT /api/auth/profile ────────────────────────────────────
+// Update profile details for the logged-in user in MongoDB
+router.put('/profile', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (typeof req.body?.fullName === 'string' && req.body.fullName.trim()) {
+      user.fullName = req.body.fullName.trim();
+    }
+    if (typeof req.body?.mobileNumber === 'string') {
+      user.mobileNumber = req.body.mobileNumber.trim();
+    }
+    if (typeof req.body?.address === 'string') {
+      user.address = req.body.address.trim();
+    }
+    if (typeof req.body?.accountType === 'string' && req.body.accountType.trim()) {
+      user.accountType = req.body.accountType.trim();
+    }
+
+    await user.save();
+    return res.json({
+      message: 'Profile updated successfully',
+      user: await buildUserPayload(user),
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    return res.status(500).json({ message: 'Something went wrong updating profile' });
+  }
 });
 
 // â”€â”€ ADMIN ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
