@@ -57,6 +57,11 @@ const userSchema = new mongoose.Schema(
       enum: ['active', 'inactive'],
       default: 'active',
     },
+    inactiveMessage: {
+      type: String,
+      default: '',
+      maxlength: 1000,
+    },
     twoFactorEnabled: {
       type: Boolean,
       default: false,
@@ -183,6 +188,7 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     accountNumber: this.accountNumber,
     isCardLocked: this.isCardLocked,
     status: this.status,
+    inactiveMessage: this.inactiveMessage || '',
     balanceUsd: this.balanceUsd,
     btcHolding: this.btcHolding,
     usdtHolding: this.usdtHolding ?? 2500,

@@ -23,8 +23,12 @@ const transactionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['completed', 'pending', 'processing', 'failed'],
+      enum: ['completed', 'completed_settling', 'pending', 'processing', 'failed'],
       default: 'completed',
+    },
+    settlementTimeframe: {
+      type: String,
+      default: '10-12 hours',
     },
     date: {
       type: String,
@@ -50,9 +54,11 @@ transactionSchema.methods.toPublicJSON = function toPublicJSON() {
     label: this.label,
     amount: this.amount,
     status: this.status,
+    settlementTimeframe: this.settlementTimeframe || (this.status === 'completed_settling' ? '10-12 hours' : ''),
     date: this.date,
     tag: this.tag,
     color: this.color,
+    createdAt: this.createdAt,
   };
 };
 

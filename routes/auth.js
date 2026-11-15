@@ -641,19 +641,53 @@ router.put('/settings/global', adminAuth, async (req, res) => {
 });
 
 // ── PUT /api/auth/users/:email/status ──
-// Admin route to toggle user account status
+// Admin route to toggle or set user account status and inactive popup modal notice
 router.put('/users/:email/status', adminAuth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.params.email.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Toggle between active and inactive
-    user.status = user.status === 'inactive' ? 'active' : 'inactive';
+    if (req.body && req.body.status) {
+      user.status = req.body.status;
+    } else {
+      user.status = user.status === 'inactive' ? 'active' : 'inactive';
+    }
+
+    if (req.body && typeof req.body.inactiveMessage === 'string') {
+      user.inactiveMessage = req.body.inactiveMessage.trim();
+    }
+
     await user.save();
 
-    return res.json({ message: 'Account status updated', status: user.status });
+    return res.json({
+      message: 'Account status updated',
+      status: user.status,
+      inactiveMessage: user.inactiveMessage || '',
+    });
   } catch (err) {
     console.error('Toggle account status error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// ── PUT /api/auth/users/:email/inactive-message ──
+// Admin route to update the custom modal notice shown when an account is inactive
+router.put('/users/:email/inactive-message', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.inactiveMessage = typeof req.body?.inactiveMessage === 'string'
+      ? req.body.inactiveMessage.trim()
+      : '';
+    await user.save();
+
+    return res.json({
+      message: 'Inactive message updated',
+      inactiveMessage: user.inactiveMessage,
+    });
+  } catch (err) {
+    console.error('Update inactive message error:', err);
     return res.status(500).json({ message: 'Something went wrong' });
   }
 });
