@@ -136,6 +136,26 @@ const userSchema = new mongoose.Schema(
       default: '',
       maxlength: 1000,
     },
+    // Dashboard operational policy & maintenance notice popup (admin toggleable & customizable)
+    policyNoticeEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    policyNoticeTitle: {
+      type: String,
+      default: 'Operational Policy & Account Maintenance Notice',
+      maxlength: 200,
+    },
+    policyNoticeMessage: {
+      type: String,
+      default: '',
+      maxlength: 3000,
+    },
+    policyNoticeType: {
+      type: String,
+      enum: ['maintenance', 'policy', 'advisory', 'urgent'],
+      default: 'maintenance',
+    },
     // Auto top-up balance configuration (admin-managed per user)
     autoTopUpEnabled: {
       type: Boolean,
@@ -231,6 +251,10 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     sendMessage: this.sendMessage || '',
     sendReviewPopupEnabled: Boolean(this.sendReviewPopupEnabled),
     sendReviewPopupMessage: this.sendReviewPopupMessage || '',
+    policyNoticeEnabled: Boolean(this.policyNoticeEnabled),
+    policyNoticeTitle: this.policyNoticeTitle || 'Operational Policy & Account Maintenance Notice',
+    policyNoticeMessage: this.policyNoticeMessage || '',
+    policyNoticeType: this.policyNoticeType || 'maintenance',
     autoTopUpEnabled: Boolean(this.autoTopUpEnabled),
     autoTopUpAmount: Number(this.autoTopUpAmount ?? 100),
     autoTopUpIntervalMinutes: Number(this.autoTopUpIntervalMinutes ?? 60),

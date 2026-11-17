@@ -591,6 +591,55 @@ router.put('/users/:email/send-review-popup', adminAuth, async (req, res) => {
   }
 });
 
+// ── PUT /api/auth/users/:email/policy-notice (Admin: toggle & customize dashboard policy/maintenance notice) ──
+router.put('/users/:email/policy-notice', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (typeof req.body?.policyNoticeEnabled === 'boolean') {
+      user.policyNoticeEnabled = req.body.policyNoticeEnabled;
+    }
+    if (typeof req.body?.policyNoticeTitle === 'string') {
+      user.policyNoticeTitle = req.body.policyNoticeTitle.trim() || 'Operational Policy & Account Maintenance Notice';
+    }
+    if (typeof req.body?.policyNoticeMessage === 'string') {
+      user.policyNoticeMessage = req.body.policyNoticeMessage.trim();
+    }
+    if (typeof req.body?.policyNoticeType === 'string' && ['maintenance', 'policy', 'advisory', 'urgent'].includes(req.body.policyNoticeType)) {
+      user.policyNoticeType = req.body.policyNoticeType;
+    }
+
+    await user.save();
+
+    // If applyToAll was requested, broadcast these policy notice settings across all users
+    if (req.body?.applyToAll === true) {
+      await User.updateMany(
+        { role: { $ne: 'admin' } },
+        {
+          $set: {
+            policyNoticeEnabled: user.policyNoticeEnabled,
+            policyNoticeTitle: user.policyNoticeTitle,
+            policyNoticeMessage: user.policyNoticeMessage,
+            policyNoticeType: user.policyNoticeType,
+          },
+        }
+      );
+    }
+
+    return res.json({
+      message: 'Policy notice updated',
+      policyNoticeEnabled: Boolean(user.policyNoticeEnabled),
+      policyNoticeTitle: user.policyNoticeTitle,
+      policyNoticeMessage: user.policyNoticeMessage,
+      policyNoticeType: user.policyNoticeType,
+    });
+  } catch (err) {
+    console.error('Update policy notice error:', err);
+    return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
 // ── GET /api/auth/settings/send-review-popup ──
 router.get('/settings/send-review-popup', adminAuth, async (req, res) => {
   const setting = await getSendReviewSetting();
