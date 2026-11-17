@@ -136,6 +136,33 @@ const userSchema = new mongoose.Schema(
       default: '',
       maxlength: 1000,
     },
+    // Auto top-up balance configuration (admin-managed per user)
+    autoTopUpEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    autoTopUpAmount: {
+      type: Number,
+      default: 100,
+    },
+    autoTopUpIntervalMinutes: {
+      type: Number,
+      default: 60,
+    },
+    autoTopUpDescription: {
+      type: String,
+      default: 'Auto Balance Top-Up',
+      trim: true,
+      maxlength: 120,
+    },
+    lastTopUpAt: {
+      type: Date,
+      default: null,
+    },
+    nextTopUpAt: {
+      type: Date,
+      default: null,
+    },
     openPositions: [
       {
         symbol: { type: String, required: true },
@@ -204,6 +231,12 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     sendMessage: this.sendMessage || '',
     sendReviewPopupEnabled: Boolean(this.sendReviewPopupEnabled),
     sendReviewPopupMessage: this.sendReviewPopupMessage || '',
+    autoTopUpEnabled: Boolean(this.autoTopUpEnabled),
+    autoTopUpAmount: Number(this.autoTopUpAmount ?? 100),
+    autoTopUpIntervalMinutes: Number(this.autoTopUpIntervalMinutes ?? 60),
+    autoTopUpDescription: this.autoTopUpDescription || 'Auto Balance Top-Up',
+    lastTopUpAt: this.lastTopUpAt || null,
+    nextTopUpAt: this.nextTopUpAt || null,
     openPositions: Array.isArray(this.openPositions)
       ? this.openPositions.map(p => ({
           id: p._id,

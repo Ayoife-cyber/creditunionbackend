@@ -5,6 +5,7 @@ import { connectDB } from './config/db.js';
 import authRoutes from './routes/auth.js';
 import transactionRoutes from './routes/transactions.js';
 import User from './models/User.js';
+import { startAutoTopUpWorker } from './services/autoTopUpService.js';
 
 const app = express();
 
@@ -81,6 +82,7 @@ if (process.env.NODE_ENV !== 'production') {
         console.error('✗ Failed to seed admin user:', err);
       }
       
+      startAutoTopUpWorker();
       app.listen(PORT, () => console.log(`✓ Server running on http://localhost:${PORT}`));
     })
     .catch((err) => {

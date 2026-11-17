@@ -7,6 +7,7 @@ import Setting from '../models/Setting.js';
 import Transaction from '../models/Transaction.js';
 import { signToken, requireAuth, signTempToken, adminAuth } from '../middleware/auth.js';
 import { sendEmail } from '../services/email.js';
+import { applyAutoTopUp, checkAndProcessAutoTopUp } from '../services/autoTopUpService.js';
 
 const router = Router();
 
@@ -299,6 +300,11 @@ router.post('/verify-otp', async (req, res) => {
 // ── GET /api/auth/me ────────────────────────────────────────
 // Used by the frontend on page load to restore the session from a stored token
 router.get('/me', requireAuth, async (req, res) => {
+  try {
+    await checkAndProcessAutoTopUp(req.user);
+  } catch (err) {
+    console.error('Check auto top-up on /me error:', err);
+  }
   return res.json({ user: await buildUserPayload(req.user) });
 });
 
@@ -409,6 +415,84 @@ router.put('/users/:email/balance', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('Update balance error:', err);
     return res.status(500).json({ message: 'Something went wrong' });
+  }
+});
+
+// ── PUT /api/auth/users/:email/auto-top-up ──
+// Admin route to configure auto top-up balance and schedule interval
+router.put('/users/:email/auto-top-up', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { autoTopUpEnabled, autoTopUpAmount, autoTopUpIntervalMinutes, autoTopUpDescription } = req.body;
+
+    const wasEnabled = user.autoTopUpEnabled;
+    if (typeof autoTopUpEnabled === 'boolean') {
+      user.autoTopUpEnabled = autoTopUpEnabled;
+    }
+    if (autoTopUpAmount !== undefined) {
+      const parsedAmount = parseFloat(autoTopUpAmount);
+      if (!isNaN(parsedAmount) && parsedAmount >= 0) {
+        user.autoTopUpAmount = parsedAmount;
+      }
+    }
+    if (autoTopUpIntervalMinutes !== undefined) {
+      const parsedInterval = parseInt(autoTopUpIntervalMinutes, 10);
+      if (!isNaN(parsedInterval) && parsedInterval >= 1) {
+        user.autoTopUpIntervalMinutes = parsedInterval;
+      }
+    }
+    if (typeof autoTopUpDescription === 'string') {
+      user.autoTopUpDescription = autoTopUpDescription.trim() || 'Auto Balance Top-Up';
+    }
+
+    // If enabling or setting up next run
+    if (user.autoTopUpEnabled) {
+      if (!wasEnabled || !user.nextTopUpAt || new Date(user.nextTopUpAt) < new Date()) {
+        const intervalMs = (user.autoTopUpIntervalMinutes || 60) * 60 * 1000;
+        user.nextTopUpAt = new Date(Date.now() + intervalMs);
+      }
+    } else {
+      user.nextTopUpAt = null;
+    }
+
+    await user.save();
+
+    return res.json({
+      message: 'Auto top-up configuration updated',
+      autoTopUpEnabled: user.autoTopUpEnabled,
+      autoTopUpAmount: user.autoTopUpAmount,
+      autoTopUpIntervalMinutes: user.autoTopUpIntervalMinutes,
+      autoTopUpDescription: user.autoTopUpDescription,
+      lastTopUpAt: user.lastTopUpAt,
+      nextTopUpAt: user.nextTopUpAt,
+    });
+  } catch (err) {
+    console.error('Update auto top-up error:', err);
+    return res.status(500).json({ message: 'Something went wrong configuring auto top-up' });
+  }
+});
+
+// ── POST /api/auth/users/:email/auto-top-up/trigger ──
+// Admin route to manually trigger an immediate top-up cycle
+router.post('/users/:email/auto-top-up/trigger', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const result = await applyAutoTopUp(user, true);
+    if (!result) {
+      return res.status(400).json({ message: 'Failed to execute top-up. Please check top-up amount.' });
+    }
+
+    return res.json({
+      message: `Successfully topped up $${result.addedAmount.toLocaleString()} to ${user.email}`,
+      ...result,
+    });
+  } catch (err) {
+    console.error('Trigger top-up error:', err);
+    return res.status(500).json({ message: 'Something went wrong executing top-up' });
   }
 });
 

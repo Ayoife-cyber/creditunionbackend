@@ -30,6 +30,11 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       default: '10-12 hours',
     },
+    settlementMessage: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     date: {
       type: String,
       default: () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
@@ -55,6 +60,7 @@ transactionSchema.methods.toPublicJSON = function toPublicJSON() {
     amount: this.amount,
     status: this.status,
     settlementTimeframe: this.settlementTimeframe || (this.status === 'completed_settling' ? '10-12 hours' : ''),
+    settlementMessage: this.settlementMessage || '',
     date: this.date,
     tag: this.tag,
     color: this.color,

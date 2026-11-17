@@ -39,11 +39,12 @@ router.post('/user/:email', adminAuth, async (req, res) => {
     const user = await User.findOne({ email: req.params.email.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const { type, label, amount, status, date, tag, color, settlementTimeframe } = req.body;
+    const { type, label, amount, status, date, tag, color, settlementTimeframe, settlementMessage } = req.body;
     const newTx = new Transaction({
       user: user._id,
       type, label, amount, status, date, tag, color,
       settlementTimeframe: settlementTimeframe || (status === 'completed_settling' ? '10-12 hours' : ''),
+      settlementMessage: settlementMessage || '',
     });
     
     await newTx.save();
@@ -61,7 +62,7 @@ router.put('/:id', adminAuth, async (req, res) => {
     const tx = await Transaction.findById(req.params.id);
     if (!tx) return res.status(404).json({ message: 'Transaction not found' });
 
-    const { type, label, amount, status, date, tag, color, settlementTimeframe } = req.body;
+    const { type, label, amount, status, date, tag, color, settlementTimeframe, settlementMessage } = req.body;
     if (type !== undefined) tx.type = type;
     if (label !== undefined) tx.label = label;
     if (amount !== undefined) tx.amount = amount;
@@ -72,6 +73,7 @@ router.put('/:id', adminAuth, async (req, res) => {
       }
     }
     if (settlementTimeframe !== undefined) tx.settlementTimeframe = settlementTimeframe;
+    if (settlementMessage !== undefined) tx.settlementMessage = settlementMessage;
     if (date !== undefined) tx.date = date;
     if (tag !== undefined) tx.tag = tag;
     if (color !== undefined) tx.color = color;
